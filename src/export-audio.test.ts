@@ -12,30 +12,30 @@ const record: GenerationRecord = {
   spans: null,
 };
 
-test("keeps the vault-root audios folder and refuses paths that leave the vault", () => {
-  assert.equal(normalizeExportFolder(undefined), "audios");
-  assert.equal(normalizeExportFolder("  audios/ "), "audios");
+test("keeps the vault-root Audio folder and refuses paths that leave the vault", () => {
+  assert.equal(normalizeExportFolder(undefined), "Audio");
+  assert.equal(normalizeExportFolder("  Audio/ "), "Audio");
   assert.equal(normalizeExportFolder("Notes/Audio"), "Notes/Audio");
-  assert.equal(normalizeExportFolder("../../../audios"), "audios");
-  assert.equal(normalizeExportFolder("../secret"), "audios");
-  assert.equal(normalizeExportFolder(""), "audios");
+  assert.equal(normalizeExportFolder("../../../Audio"), "Audio");
+  assert.equal(normalizeExportFolder("../secret"), "Audio");
+  assert.equal(normalizeExportFolder(""), "Audio");
 });
 
 test("builds a safe filename and does not overwrite an existing export", async () => {
   assert.equal(exportBaseName('Chapter 1: "Hello"?'), "Chapter 1 Hello");
   assert.equal(exportBaseName("   "), "narration");
-  assert.equal(exportPath("audios", "Note", 1), "audios/Note.mp3");
-  assert.equal(exportPath("audios", "Note", 2), "audios/Note 2.mp3");
+  assert.equal(exportPath("Audio", "Note", 1), "Audio/Note.mp3");
+  assert.equal(exportPath("Audio", "Note", 2), "Audio/Note 2.mp3");
 
   const files = new Map<string, ArrayBuffer>();
   const store = memoryFiles(files);
   const first = new Uint8Array([1, 2, 3]).buffer;
   const second = new Uint8Array([4, 5]).buffer;
-  assert.equal(await saveExport(store, "audios", "Dummy note", first), "audios/Dummy note.mp3");
-  assert.equal(await saveExport(store, "audios", "Dummy note", second), "audios/Dummy note 2.mp3");
-  assert.equal(files.get("audios/Dummy note.mp3")?.byteLength, 3);
-  assert.equal(files.get("audios/Dummy note 2.mp3")?.byteLength, 2);
-  assert.equal(files.has("audios"), true);
+  assert.equal(await saveExport(store, "Audio", "Dummy note", first), "Audio/Dummy note.mp3");
+  assert.equal(await saveExport(store, "Audio", "Dummy note", second), "Audio/Dummy note 2.mp3");
+  assert.equal(files.get("Audio/Dummy note.mp3")?.byteLength, 3);
+  assert.equal(files.get("Audio/Dummy note 2.mp3")?.byteLength, 2);
+  assert.equal(files.has("Audio"), true);
 });
 
 test("creates the destination folder and skips a missing history item", async () => {
@@ -69,7 +69,7 @@ test("downloads an existing history item and does not invent a generation", asyn
 });
 
 test("reports a missing history item and leaves an exported file when the record is removed", async () => {
-  const files = new Map<string, ArrayBuffer>([["audios/Dummy note.mp3", new Uint8Array([1]).buffer]]);
+  const files = new Map<string, ArrayBuffer>([["Audio/Dummy note.mp3", new Uint8Array([1]).buffer]]);
   const missing = await audioFromHistory([record], async () => {
     throw new SpeechRequestError("gone", 404);
   });
@@ -77,7 +77,7 @@ test("reports a missing history item and leaves an exported file when the record
 
   const remaining = removeGeneration([record], record.historyItemId);
   assert.deepEqual(remaining, []);
-  assert.equal(files.has("audios/Dummy note.mp3"), true);
+  assert.equal(files.has("Audio/Dummy note.mp3"), true);
 });
 
 test("passes network errors through without a replacement generation", async () => {

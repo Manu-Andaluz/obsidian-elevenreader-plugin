@@ -109,7 +109,7 @@ export class ReaderSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Export folder")
-      .setDesc("Vault folder for exported MP3 files. The default, audios, is the vault root: ../../../audios from the installed plugin.")
+      .setDesc("Vault folder for exported MP3 files. The default, Audio, is the vault root: ../../../Audio from the installed plugin.")
       .addText((text) => {
         text.setPlaceholder(DEFAULT_EXPORT_FOLDER).setValue(this.plugin.settings.exportFolder).onChange((value) => {
           this.plugin.setExportFolder(value);

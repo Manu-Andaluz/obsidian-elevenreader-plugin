@@ -6,6 +6,7 @@ export interface GenerationRecord {
   createdAt: number;
   reusable: boolean;
   spans: SpokenSpan[] | null;
+  audioPath?: string | null;
 }
 
 export async function narrationFingerprint(input: {
@@ -85,6 +86,19 @@ function readRecord(value: unknown): GenerationRecord[] {
       createdAt: record.createdAt,
       reusable: record.reusable === true,
       spans: sanitizeSpans(record.spans),
+      audioPath: sanitizeAudioPath(record.audioPath),
     },
   ];
+}
+
+function sanitizeAudioPath(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parts = value.split(/[\\/]+/).map((part) => part.trim());
+  if (
+    parts.some((part) => !part || part === "." || part === ".." || /[\u0000-\u001f]/.test(part)) ||
+    !/\.mp3$/i.test(parts.at(-1) ?? "")
+  ) {
+    return null;
+  }
+  return parts.join("/");
 }

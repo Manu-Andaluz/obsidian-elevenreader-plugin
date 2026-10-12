@@ -254,12 +254,6 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       new Notice("Open a note to export its narration.");
       return;
     }
-    if (!this.getApiKey()) {
-      new Notice("Add an ElevenLabs API key in plugin settings.");
-      this.openSettings();
-      return;
-    }
-
     const text = narrationText(await this.app.vault.read(file));
     if (!text) {
       new Notice("This note has no saved narration. Run Narrate current note, then export.");
@@ -279,12 +273,22 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     }
 
     new Notice("Exporting narration…");
-    let downloaded: Awaited<ReturnType<typeof audioFromHistory>>;
-    try {
-      downloaded = await audioFromHistory(matches, (historyItemId) => this.fetchHistoryAudio(historyItemId));
-    } catch (error) {
-      new Notice(errorText(error));
-      return;
+    let downloaded: Awaited<ReturnType<typeof audioFromHistory>> | { audio: ArrayBuffer; historyItemId: string };
+    const localAudio = await this.audioFromSavedExport(matches);
+    if (localAudio) {
+      downloaded = localAudio;
+    } else {
+      if (!this.getApiKey()) {
+        new Notice("Add an ElevenLabs API key in plugin settings.");
+        this.openSettings();
+        return;
+      }
+      try {
+        downloaded = await audioFromHistory(matches, (historyItemId) => this.fetchHistoryAudio(historyItemId));
+      } catch (error) {
+        new Notice(errorText(error));
+        return;
+      }
     }
 
     if ("missingIds" in downloaded) {
@@ -307,6 +311,12 @@ export default class ElevenLabsReaderPlugin extends Plugin {
         file.basename,
         downloaded.audio,
       );
+      this.settings.generations = this.settings.generations.map((generation) =>
+        generation.historyItemId === downloaded.historyItemId
+          ? { ...generation, audioPath: path }
+          : generation,
+      );
+      await this.saveSettings();
       new Notice(`Exported to ${path}`);
     } catch (error) {
       new Notice(error instanceof Error && error.message.trim() ? error.message : "Could not save the export.");
@@ -355,13 +365,6 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       return;
     }
 
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      this.report("Add an ElevenLabs API key in plugin settings.");
-      this.openSettings();
-      return;
-    }
-
     const text = narrationText(await this.app.vault.read(file));
     if (!text) {
       this.report("This note has nothing to narrate.");
@@ -388,6 +391,14 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     if (matches.length > 0) {
       const reused = await this.tryReuse(matches, token, file.path, text);
       if (reused !== "generate") return;
+    }
+
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      this.setPhase("idle");
+      this.report("Add an ElevenLabs API key in plugin settings.");
+      this.openSettings();
+      return;
     }
 
     try {
@@ -422,6 +433,19 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     let missing = false;
     for (const match of matches) {
       if (token !== this.generation) return "done";
+      const localAudio = await this.readLocalAudio(match.audioPath);
+      if (token !== this.generation) return "done";
+      if (localAudio) {
+        this.script = { path, text, spans: match.spans };
+        this.play(localAudio, token);
+        return "done";
+      }
+      if (!this.getApiKey()) {
+        this.setPhase("idle");
+        this.report("Add an ElevenLabs API key in plugin settings.");
+        this.openSettings();
+        return "done";
+      }
       try {
         const audio = await this.fetchHistoryAudio(match.historyItemId);
         if (token !== this.generation) return "done";
@@ -448,6 +472,27 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.setPhase("idle");
     this.report("The saved narration is no longer available. Narrate again to generate a new one.");
     return "done";
+  }
+
+  private async audioFromSavedExport(
+    matches: readonly GenerationRecord[],
+  ): Promise<{ audio: ArrayBuffer; historyItemId: string } | null> {
+    for (const match of matches) {
+      const audio = await this.readLocalAudio(match.audioPath);
+      if (audio) return { audio, historyItemId: match.historyItemId };
+    }
+    return null;
+  }
+
+  private async readLocalAudio(path: string | null | undefined): Promise<ArrayBuffer | null> {
+    if (!path) return null;
+    try {
+      if (!(await this.app.vault.adapter.exists(path))) return null;
+      const audio = await this.app.vault.adapter.readBinary(path);
+      return audio.byteLength > 0 ? audio : null;
+    } catch {
+      return null;
+    }
   }
 
   private async verifyForReuse(

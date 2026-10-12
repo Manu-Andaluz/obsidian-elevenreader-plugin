@@ -2,8 +2,8 @@ import { isMissingAudio } from "./history.ts";
 import type { GenerationRecord } from "./history.ts";
 import { SpeechRequestError } from "./speech.ts";
 
-/** Vault-root folder. From `.obsidian/plugins/elevenlabs-reader` this is `../../../audios`. */
-export const DEFAULT_EXPORT_FOLDER = "audios";
+/** Vault-root folder. From `.obsidian/plugins/elevenlabs-reader` this is `../../../Audio`. */
+export const DEFAULT_EXPORT_FOLDER = "Audio";
 
 const MAX_EXPORT_SUFFIX = 999;
 
