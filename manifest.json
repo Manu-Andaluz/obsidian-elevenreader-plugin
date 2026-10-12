@@ -1,0 +1,9 @@
+{
+  "id": "elevenlabs-reader",
+  "name": "ElevenLabs Reader",
+  "version": "0.6.0",
+  "minAppVersion": "1.11.4",
+  "description": "Narrate the current note with ElevenLabs.",
+  "author": "local",
+  "isDesktopOnly": true
+}

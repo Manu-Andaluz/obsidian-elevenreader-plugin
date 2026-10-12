@@ -1,0 +1,78 @@
+.elevenlabs-player {
+  position: fixed;
+  right: 16px;
+  bottom: 48px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.elevenlabs-player.is-hidden {
+  display: none;
+}
+
+.elevenlabs-player.is-placed {
+  right: auto;
+  bottom: auto;
+}
+
+.elevenlabs-player.is-dragging {
+  cursor: grabbing;
+}
+
+.elevenlabs-player-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.elevenlabs-player-play:hover {
+  background: var(--background-modifier-hover);
+}
+
+.elevenlabs-player-play svg {
+  width: 16px;
+  height: 16px;
+}
+
+.elevenlabs-player-seek {
+  width: 108px;
+  margin: 0;
+  accent-color: var(--text-muted);
+  cursor: pointer;
+}
+
+.elevenlabs-player-seek:disabled {
+  opacity: 0.45;
+}
+
+.elevenlabs-player-time {
+  min-width: 2.6em;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.elevenlabs-spoken {
+  background-color: color-mix(in srgb, var(--text-accent) 28%, transparent);
+  border-radius: 2px;
+}
