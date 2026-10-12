@@ -19,8 +19,8 @@ Put the API key in the plugin settings. Obsidian keeps it in this vault's secret
 ## Use
 
 1. Open a note.
-2. Run **Narrate current note** from the command palette, or open the player with **Open player** (`⌘⇧L`) and press play.
-3. The player shows `…` while ElevenLabs generates, then plays. Drag the bar to move it. Play, pause, and the slider seek within the current narration.
+2. Run **Open actions** (`⌘⇧A`) and pick narrate, open player, stop, or remove saved narration. The same four commands remain in the command palette. **Open player** is also `⌘⇧L`.
+3. The player shows `…` while ElevenLabs generates, then plays. Drag the bar to move it. Play, pause, and the slider seek within the current narration. Skip backward and skip forward jump by the interval in plugin settings (5, 10, or 15 seconds; 10 by default). They are available while audio is playing or paused. The bar fades in when it opens and fades out when you hide it. Play and pause swap with a short mark. A reduced-motion preference turns that motion off.
 4. Run **Stop narration** to cancel generation or discard the current audio.
 
 A failed request shows the ElevenLabs error in a notice. Cancelling shows `Narration cancelled.` The note itself is left unchanged.

@@ -5,20 +5,34 @@
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   width: max-content;
-  padding: 4px 10px 4px 4px;
+  padding: 3px 4px 3px 3px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  background: color-mix(in srgb, var(--background-primary) 90%, transparent);
+  box-shadow: var(--shadow-s);
   color: var(--text-muted);
   cursor: grab;
   user-select: none;
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 0s linear 0s;
 }
 
 .elevenlabs-player.is-hidden {
-  display: none;
+  opacity: 0;
+  transform: translateY(6px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
 }
 
 .elevenlabs-player.is-placed {
@@ -28,9 +42,11 @@
 
 .elevenlabs-player.is-dragging {
   cursor: grabbing;
+  transition: none;
 }
 
-.elevenlabs-player-play {
+.elevenlabs-player-play,
+.elevenlabs-player-skip {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,19 +61,78 @@
   cursor: pointer;
 }
 
-.elevenlabs-player-play:hover {
+.elevenlabs-player-play:hover,
+.elevenlabs-player-skip:hover:not(:disabled) {
   background: var(--background-modifier-hover);
 }
 
-.elevenlabs-player-play svg {
+.elevenlabs-player-skip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.elevenlabs-player-play svg,
+.elevenlabs-player-skip svg,
+.elevenlabs-player-hide svg {
   width: 16px;
   height: 16px;
 }
 
+.elevenlabs-player-play svg {
+  animation: elevenlabs-player-mark 140ms ease;
+}
+
+.elevenlabs-player-hide svg {
+  width: 12px;
+  height: 12px;
+}
+
+.elevenlabs-player-hide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.elevenlabs-player-hide:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+@keyframes elevenlabs-player-mark {
+  from {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elevenlabs-player,
+  .elevenlabs-player.is-hidden {
+    transition: none;
+  }
+
+  .elevenlabs-player-play svg {
+    animation: none;
+  }
+}
+
 .elevenlabs-player-seek {
-  width: 108px;
-  margin: 0;
-  accent-color: var(--text-muted);
+  width: 96px;
+  margin: 0 2px 0 8px;
+  accent-color: var(--text-faint);
   cursor: pointer;
 }
 
@@ -70,6 +145,34 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+.modal.elevenlabs-actions {
+  width: min(280px, calc(100vw - 32px));
+  padding: 20px 16px 12px;
+}
+
+.elevenlabs-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.elevenlabs-actions-item {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-normal);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.elevenlabs-actions-item:hover {
+  background: var(--background-modifier-hover);
 }
 
 .elevenlabs-spoken {

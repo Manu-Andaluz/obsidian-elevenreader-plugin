@@ -1,5 +1,6 @@
 import { App, DropdownComponent, PluginSettingTab, Setting } from "obsidian";
 import { choiceLabels, ensureChoice, type CatalogChoice } from "./catalog";
+import { DEFAULT_SKIP_SECONDS, SKIP_SECONDS, type SkipSeconds } from "./player-geometry";
 import type { GenerationRecord } from "./history";
 import type ElevenLabsReaderPlugin from "./main";
 
@@ -8,6 +9,7 @@ export interface ReaderSettings {
   modelId: string;
   playerLeft: number | null;
   playerTop: number | null;
+  skipSeconds: SkipSeconds;
   generations: GenerationRecord[];
 }
 
@@ -18,6 +20,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   modelId: "eleven_multilingual_v2",
   playerLeft: null,
   playerTop: null,
+  skipSeconds: DEFAULT_SKIP_SECONDS,
   generations: [],
 };
 
@@ -71,6 +74,21 @@ export class ReaderSettingTab extends PluginSettingTab {
         dropdown.onChange(async (value) => {
           this.plugin.settings.modelId = value;
           await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Skip")
+      .setDesc("How far skip backward and skip forward jump.")
+      .addDropdown((dropdown) => {
+        for (const seconds of SKIP_SECONDS) {
+          dropdown.addOption(String(seconds), `${seconds} seconds`);
+        }
+        dropdown.setValue(String(this.plugin.settings.skipSeconds)).onChange((value) => {
+          const seconds = Number(value);
+          if (seconds === 5 || seconds === 10 || seconds === 15) {
+            this.plugin.setSkipSeconds(seconds);
+          }
         });
       });
 

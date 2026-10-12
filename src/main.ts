@@ -1,4 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, base64ToArrayBuffer, requestUrl } from "obsidian";
+import { READER_ACTIONS, type ReaderAction, type ReaderActionId } from "./actions";
+import { ReaderActionsModal } from "./actions-modal";
 import { EditorView } from "@codemirror/view";
 import { loadVoiceCatalog, modelsUrl, parseSpeechModels, type CatalogChoice } from "./catalog";
 import {
@@ -15,6 +17,7 @@ import {
 import { narrationText } from "./note-text";
 import { clearSpokenRange, showSpokenRange, spokenField } from "./editor-highlight";
 import { MiniPlayer, type PlayerPhase } from "./player";
+import { normalizeSkipSeconds, type SkipSeconds } from "./player-geometry";
 import {
   API_KEY_SECRET_ID,
   DEFAULT_SETTINGS,
@@ -61,6 +64,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
         void this.saveSettings();
       },
     });
+    this.player.setSkipSeconds(this.settings.skipSeconds);
     this.register(() => this.player?.destroy());
     this.restorePlayerPlace();
 
@@ -74,38 +78,51 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       }),
     );
 
+    for (const action of this.readerActions()) {
+      this.addCommand({
+        id: action.id,
+        name: action.name,
+        hotkeys: action.id === "open-player" ? [{ modifiers: ["Mod", "Shift"], key: "l" }] : undefined,
+        callback: () => {
+          action.run();
+        },
+      });
+    }
+
     this.addCommand({
-      id: "narrate-current-note",
-      name: "Narrate current note",
+      id: "open-actions",
+      name: "Open actions",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "a" }],
       callback: () => {
+        this.openActions();
+      },
+    });
+  }
+
+  private readerActions(): ReaderAction[] {
+    const run: Record<ReaderActionId, () => void> = {
+      "narrate-current-note": () => {
         void this.narrateCurrentNote();
       },
-    });
-
-    this.addCommand({
-      id: "open-player",
-      name: "Open player",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "l" }],
-      callback: () => {
+      "open-player": () => {
         this.player?.show();
       },
-    });
-
-    this.addCommand({
-      id: "stop-narration",
-      name: "Stop narration",
-      callback: () => {
+      "stop-narration": () => {
         this.stopNarration();
       },
-    });
-
-    this.addCommand({
-      id: "remove-saved-narration",
-      name: "Remove saved narration",
-      callback: () => {
+      "remove-saved-narration": () => {
         void this.removeSavedNarration();
       },
-    });
+    };
+    return READER_ACTIONS.map((action) => ({
+      id: action.id,
+      name: action.name,
+      run: run[action.id],
+    }));
+  }
+
+  private openActions(): void {
+    new ReaderActionsModal(this.app, this.readerActions()).open();
   }
 
   onunload(): void {
@@ -119,8 +136,15 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...stored,
+      skipSeconds: normalizeSkipSeconds(stored?.skipSeconds),
       generations: sanitizeGenerations(stored?.generations),
     };
+  }
+
+  setSkipSeconds(seconds: SkipSeconds): void {
+    this.settings.skipSeconds = seconds;
+    this.player?.setSkipSeconds(seconds);
+    void this.saveSettings();
   }
 
   async saveSettings(): Promise<void> {
