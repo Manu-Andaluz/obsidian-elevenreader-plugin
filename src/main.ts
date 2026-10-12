@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile, base64ToArrayBuffer, requestUrl } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, base64ToArrayBuffer, requestUrl, type Editor } from "obsidian";
 import { READER_ACTIONS, type ReaderAction, type ReaderActionId } from "./actions";
 import { ReaderActionsModal } from "./actions-modal";
 import { EditorView } from "@codemirror/view";
@@ -52,7 +52,12 @@ export default class ElevenLabsReaderPlugin extends Plugin {
   private audio: HTMLAudioElement | null = null;
   private audioUrl: string | null = null;
   private player: MiniPlayer | null = null;
-  private script: { path: string; text: string; spans: SpokenSpan[] | null } | null = null;
+  private script: {
+    path: string;
+    text: string;
+    spans: SpokenSpan[] | null;
+    selection?: { from: number; to: number };
+  } | null = null;
   private highlightView: EditorView | null = null;
   private highlightKey = "";
 
@@ -99,10 +104,11 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       this.app.workspace.on("editor-menu", (menu, editor) => {
         const selection = editor.getSelection();
         if (!selection.trim()) return;
+        const range = editorSelectionRange(editor);
 
         menu.addItem((item) => {
           item.setTitle("Narrate selected text").onClick(() => {
-            void this.narrateSelectedText(selection);
+            void this.narrateSelectedText(selection, range);
           });
         });
       }),
@@ -114,7 +120,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
           id: action.id,
           name: action.name,
           editorCallback: (editor) => {
-            void this.narrateSelectedText(editor.getSelection());
+            void this.narrateSelectedText(editor.getSelection(), editorSelectionRange(editor));
           },
         });
         continue;
@@ -412,26 +418,33 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     await this.narrateText(file.path, text);
   }
 
-  private async narrateSelectedText(selection?: string): Promise<void> {
+  private async narrateSelectedText(
+    selection?: string,
+    selectedRange?: { from: number; to: number },
+  ): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!(file instanceof TFile) || file.extension !== "md") {
       this.report("Open a note and select text to narrate.");
       return;
     }
 
-    const selectedText = selection ?? this.app.workspace
-      .getActiveViewOfType(MarkdownView)
-      ?.editor.getSelection();
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const selectedText = selection ?? view?.editor.getSelection();
+    const range = selectedRange ?? (view ? editorSelectionRange(view.editor) : undefined);
     const text = narrationSelectionText(selectedText ?? "");
     if (!text) {
       this.report("Select some text to narrate.");
       return;
     }
 
-    await this.narrateText(file.path, text);
+    await this.narrateText(file.path, text, range);
   }
 
-  private async narrateText(path: string, text: string): Promise<void> {
+  private async narrateText(
+    path: string,
+    text: string,
+    selection?: { from: number; to: number },
+  ): Promise<void> {
     const token = ++this.generation;
     this.releaseAudio();
     this.script = null;
@@ -450,7 +463,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 
     const matches = reusableMatches(this.settings.generations, fingerprint);
     if (matches.length > 0) {
-      const reused = await this.tryReuse(matches, token, path, text);
+      const reused = await this.tryReuse(matches, token, path, text, selection);
       if (reused !== "generate") return;
     }
 
@@ -476,7 +489,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       const spans = wordSpans(text, result.characters, result.starts, result.ends);
       const verified = await this.verifyForReuse(result.historyItemId, fingerprint, token, spans);
       if (token !== this.generation) return;
-      this.script = { path, text, spans };
+      this.script = { path, text, spans, selection };
       this.play(verified ?? base64ToArrayBuffer(result.audioBase64), token);
     } catch (error) {
       if (token !== this.generation) return;
@@ -490,6 +503,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     token: number,
     path: string,
     text: string,
+    selection?: { from: number; to: number },
   ): Promise<"done" | "generate"> {
     let missing = false;
     for (const match of matches) {
@@ -497,7 +511,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       const localAudio = await this.readLocalAudio(match.audioPath);
       if (token !== this.generation) return "done";
       if (localAudio) {
-        this.script = { path, text, spans: match.spans };
+        this.script = { path, text, spans: match.spans, selection };
         this.play(localAudio, token);
         return "done";
       }
@@ -510,7 +524,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       try {
         const audio = await this.fetchHistoryAudio(match.historyItemId);
         if (token !== this.generation) return "done";
-        this.script = { path, text, spans: match.spans };
+        this.script = { path, text, spans: match.spans, selection };
         this.play(audio, token);
         return "done";
       } catch (error) {
@@ -680,9 +694,27 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     }
     const markdown = view.editor.getValue();
     const bounds = spokenBounds(markdown);
-    if (!bounds || bounds.text !== script.text) {
+    if (!bounds) {
       this.clearHighlight();
       return;
+    }
+    let sourceStart = bounds.start;
+    let sourceLength = script.text.length;
+    if (bounds.text !== script.text) {
+      const selection = script.selection;
+      if (!selection) {
+        this.clearHighlight();
+        return;
+      }
+      const rawSelection = markdown.slice(selection.from, selection.to);
+      // Fenced blocks are removed from narration, so their source offsets cannot
+      // be mapped directly to the spoken character offsets.
+      if (rawSelection.trim() !== script.text) {
+        this.clearHighlight();
+        return;
+      }
+      sourceStart = selection.from + (rawSelection.length - rawSelection.trimStart().length);
+      sourceLength = markdown.length;
     }
     const spans = script.spans ?? estimatedSpans(script.text, duration);
     const span = spanAtTime(spans, current);
@@ -692,12 +724,17 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     }
     if (view.getMode() === "preview") {
       this.clearEditorHighlight();
-      this.showPreviewHighlight(view, script.text.slice(span.from, span.to), span.from, script.text.length);
+      this.showPreviewHighlight(
+        view,
+        script.text.slice(span.from, span.to),
+        sourceStart + span.from,
+        sourceLength,
+      );
       return;
     }
     clearPreviewHighlight();
-    const from = bounds.start + span.from;
-    const to = bounds.start + span.to;
+    const from = sourceStart + span.from;
+    const to = sourceStart + span.to;
     const cm = codeMirrorOf(view);
     if (!cm) {
       this.clearEditorHighlight();
@@ -803,6 +840,13 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 function codeMirrorOf(view: MarkdownView): EditorView | null {
   const cm = (view.editor as { cm?: unknown }).cm;
   return cm instanceof EditorView ? cm : null;
+}
+
+function editorSelectionRange(editor: Editor): { from: number; to: number } {
+  return {
+    from: editor.posToOffset(editor.getCursor("from")),
+    to: editor.posToOffset(editor.getCursor("to")),
+  };
 }
 
 function previewTextNodes(root: HTMLElement): Text[] {
