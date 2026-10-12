@@ -25,6 +25,7 @@ import {
   ReaderSettingTab,
   type ReaderSettings,
 } from "./settings";
+import { locatePreviewSpan, textNodeSpan } from "./preview-highlight";
 import { estimatedSpans, spanAtTime, spokenBounds, wordSpans, type SpokenSpan } from "./spoken";
 import {
   OUTPUT_FORMAT,
@@ -77,6 +78,12 @@ export default class ElevenLabsReaderPlugin extends Plugin {
         this.highlightKey = "";
         if (this.audio) this.syncHighlight(this.audio.currentTime, this.audio.duration);
         else this.clearHighlight();
+      }),
+    );
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => {
+        this.highlightKey = "";
+        if (this.audio) this.syncHighlight(this.audio.currentTime, this.audio.duration);
       }),
     );
 
@@ -132,6 +139,8 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.releaseAudio();
     this.clearHighlight();
     document.body.style.removeProperty("--elevenlabs-spoken");
+    document.documentElement.style.removeProperty("--elevenlabs-spoken");
+    clearPreviewHighlight();
   }
 
   async loadSettings(): Promise<void> {
@@ -153,6 +162,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 
   private applyHighlightColor(): void {
     document.body.style.setProperty("--elevenlabs-spoken", this.settings.highlightColor);
+    document.documentElement.style.setProperty("--elevenlabs-spoken", this.settings.highlightColor);
   }
 
   setSkipSeconds(seconds: SkipSeconds): void {
@@ -482,27 +492,37 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 
   private syncHighlight(current: number, duration: number): void {
     const script = this.script;
-    const view = this.activeEditor();
-    if (!script || !view) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!script || !view || view.file?.path !== script.path) {
       this.clearHighlight();
       return;
     }
     const markdown = view.editor.getValue();
     const bounds = spokenBounds(markdown);
-    if (!bounds || view.file?.path !== script.path || bounds.text !== script.text) {
+    if (!bounds || bounds.text !== script.text) {
       this.clearHighlight();
       return;
     }
     const spans = script.spans ?? estimatedSpans(script.text, duration);
     const span = spanAtTime(spans, current);
-    const cm = codeMirrorOf(view);
-    if (!span || !cm) {
+    if (!span) {
       this.clearHighlight();
       return;
     }
+    if (view.getMode() === "preview") {
+      this.clearEditorHighlight();
+      this.showPreviewHighlight(view, script.text.slice(span.from, span.to), span.from, script.text.length);
+      return;
+    }
+    clearPreviewHighlight();
     const from = bounds.start + span.from;
     const to = bounds.start + span.to;
-    const key = `${from}:${to}:${markdown.length}`;
+    const cm = codeMirrorOf(view);
+    if (!cm) {
+      this.clearEditorHighlight();
+      return;
+    }
+    const key = `source:${from}:${to}:${markdown.length}`;
     if (this.highlightView === cm && this.highlightKey === key) return;
     if (this.highlightView && this.highlightView !== cm) clearSpokenRange(this.highlightView);
     this.highlightView = cm;
@@ -510,16 +530,50 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     showSpokenRange(cm, from, to);
   }
 
+  private showPreviewHighlight(view: MarkdownView, token: string, sourceFrom: number, sourceLength: number): void {
+    const root = view.containerEl.querySelector(".markdown-preview-view");
+    if (!(root instanceof HTMLElement)) {
+      clearPreviewHighlight();
+      this.highlightKey = "";
+      return;
+    }
+    const nodes = previewTextNodes(root);
+    const previewText = nodes.map((node) => node.textContent ?? "").join("");
+    const located = locatePreviewSpan(previewText, token, sourceFrom, sourceLength);
+    const placed = located ? textNodeSpan(nodes.map((node) => node.textContent?.length ?? 0), located.start, located.end) : null;
+    if (!located || !placed) {
+      clearPreviewHighlight();
+      this.highlightKey = "";
+      return;
+    }
+    const key = `preview:${located.start}:${located.end}:${token}`;
+    if (this.highlightKey === key) return;
+    const startNode = nodes[placed.startNode];
+    const endNode = nodes[placed.endNode];
+    if (!startNode || !endNode) {
+      clearPreviewHighlight();
+      this.highlightKey = "";
+      return;
+    }
+    const range = document.createRange();
+    range.setStart(startNode, placed.startOffset);
+    range.setEnd(endNode, placed.endOffset);
+    if (!paintPreviewRange(range)) {
+      this.highlightKey = "";
+      return;
+    }
+    this.highlightKey = key;
+  }
+
   private clearHighlight(): void {
-    if (this.highlightView) clearSpokenRange(this.highlightView);
-    this.highlightView = null;
+    this.clearEditorHighlight();
+    clearPreviewHighlight();
     this.highlightKey = "";
   }
 
-  private activeEditor(): MarkdownView | null {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view || view.getMode() === "preview") return null;
-    return view;
+  private clearEditorHighlight(): void {
+    if (this.highlightView) clearSpokenRange(this.highlightView);
+    this.highlightView = null;
   }
 
   private stopNarration(): void {
@@ -568,6 +622,51 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 function codeMirrorOf(view: MarkdownView): EditorView | null {
   const cm = (view.editor as { cm?: unknown }).cm;
   return cm instanceof EditorView ? cm : null;
+}
+
+function previewTextNodes(root: HTMLElement): Text[] {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) nodes.push(current);
+    current = walker.nextNode();
+  }
+  return nodes;
+}
+
+function paintPreviewRange(range: Range): boolean {
+  const highlights = previewRegistry();
+  const HighlightCtor = (globalThis as unknown as { Highlight?: new () => PreviewHighlight }).Highlight;
+  if (!highlights || !HighlightCtor) return false;
+  let entry = highlights.get(PREVIEW_HIGHLIGHT);
+  if (!entry) {
+    entry = new HighlightCtor();
+    highlights.set(PREVIEW_HIGHLIGHT, entry);
+  }
+  entry.clear();
+  entry.add(range);
+  return true;
+}
+
+function clearPreviewHighlight(): void {
+  previewRegistry()?.get(PREVIEW_HIGHLIGHT)?.clear();
+}
+
+function previewRegistry(): PreviewHighlightRegistry | undefined {
+  return (globalThis as unknown as { CSS?: { highlights?: PreviewHighlightRegistry } }).CSS?.highlights;
+}
+
+const PREVIEW_HIGHLIGHT = "elevenlabs-spoken";
+
+interface PreviewHighlight {
+  add(range: Range): void;
+  clear(): void;
+}
+
+interface PreviewHighlightRegistry {
+  get(name: string): PreviewHighlight | undefined;
+  set(name: string, value: PreviewHighlight): void;
 }
 
 function obsidianTransport(): SpeechTransport {

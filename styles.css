@@ -211,3 +211,7 @@
   background-color: color-mix(in srgb, var(--elevenlabs-spoken, #f0c14a) 55%, transparent) !important;
   border-radius: 2px;
 }
+
+::highlight(elevenlabs-spoken) {
+  background-color: color-mix(in srgb, var(--elevenlabs-spoken, #f0c14a) 55%, transparent);
+}

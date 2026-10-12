@@ -31,6 +31,6 @@ A matching narration is reused when the note text, voice, model, and audio forma
 
 **Remove saved narration** drops the saved reference for the open note, using the current voice and model. The next narration generates a replacement. Other saved narrations stay.
 
-While audio plays, the current word is highlighted in the editor. The highlight follows pause and seek. The editor does not scroll to it, and you can keep editing. The highlight color is chosen in plugin settings, so it can stay visible when a theme or CSS snippet paints the editor. A new narration stores word timing from [Create speech with timing](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps). Older saved narrations estimate the word from the playback position.
+While audio plays, the current word is highlighted in the editor and in reading view. The highlight follows pause and seek. The note does not scroll to it, and you can keep editing or moving around. The highlight color is chosen in plugin settings, so it can stay visible when a theme or CSS snippet paints the editor. A new narration stores word timing from [Create speech with timing](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps). Older saved narrations estimate the word from the playback position.
 
 Speech is requested from [Create speech](https://elevenlabs.io/docs/api-reference/text-to-speech/convert): `POST /v1/text-to-speech/{voice_id}`.
