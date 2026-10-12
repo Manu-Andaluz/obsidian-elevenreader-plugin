@@ -14,6 +14,7 @@ import {
   sanitizeGenerations,
   type GenerationRecord,
 } from "./history";
+import { audioFromHistory, normalizeExportFolder, saveExport } from "./export-audio";
 import { narrationText } from "./note-text";
 import { clearSpokenRange, showSpokenRange, spokenField } from "./editor-highlight";
 import { MiniPlayer, type PlayerPhase } from "./player";
@@ -122,6 +123,9 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       "remove-saved-narration": () => {
         void this.removeSavedNarration();
       },
+      "export-audio": () => {
+        void this.exportCurrentNote();
+      },
     };
     return READER_ACTIONS.map((action) => ({
       id: action.id,
@@ -150,6 +154,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       ...stored,
       skipSeconds: normalizeSkipSeconds(stored?.skipSeconds),
       highlightColor: normalizeHighlightColor(stored?.highlightColor),
+      exportFolder: normalizeExportFolder(stored?.exportFolder),
       generations: sanitizeGenerations(stored?.generations),
     };
   }
@@ -163,6 +168,11 @@ export default class ElevenLabsReaderPlugin extends Plugin {
   private applyHighlightColor(): void {
     document.body.style.setProperty("--elevenlabs-spoken", this.settings.highlightColor);
     document.documentElement.style.setProperty("--elevenlabs-spoken", this.settings.highlightColor);
+  }
+
+  setExportFolder(folder: string): void {
+    this.settings.exportFolder = normalizeExportFolder(folder);
+    void this.saveSettings();
   }
 
   setSkipSeconds(seconds: SkipSeconds): void {
@@ -236,6 +246,71 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     if (!this.audio || this.phase === "generating") return;
     if (!Number.isFinite(seconds)) return;
     this.audio.currentTime = seconds;
+  }
+
+  private async exportCurrentNote(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || file.extension !== "md") {
+      new Notice("Open a note to export its narration.");
+      return;
+    }
+    if (!this.getApiKey()) {
+      new Notice("Add an ElevenLabs API key in plugin settings.");
+      this.openSettings();
+      return;
+    }
+
+    const text = narrationText(await this.app.vault.read(file));
+    if (!text) {
+      new Notice("This note has no saved narration. Run Narrate current note, then export.");
+      return;
+    }
+
+    const fingerprint = await narrationFingerprint({
+      text,
+      voiceId: this.settings.voiceId,
+      modelId: this.settings.modelId,
+      outputFormat: OUTPUT_FORMAT,
+    });
+    const matches = reusableMatches(this.settings.generations, fingerprint);
+    if (matches.length === 0) {
+      new Notice("This note has no saved narration. Run Narrate current note, then export.");
+      return;
+    }
+
+    new Notice("Exporting narration…");
+    let downloaded: Awaited<ReturnType<typeof audioFromHistory>>;
+    try {
+      downloaded = await audioFromHistory(matches, (historyItemId) => this.fetchHistoryAudio(historyItemId));
+    } catch (error) {
+      new Notice(errorText(error));
+      return;
+    }
+
+    if ("missingIds" in downloaded) {
+      for (const historyItemId of downloaded.missingIds) {
+        this.settings.generations = retireGeneration(this.settings.generations, historyItemId);
+      }
+      await this.saveSettings();
+      new Notice("The saved narration is no longer available. Narrate again to generate a new one, then export.");
+      return;
+    }
+
+    try {
+      const path = await saveExport(
+        {
+          exists: (target) => this.app.vault.adapter.exists(target),
+          mkdir: (target) => this.app.vault.adapter.mkdir(target),
+          write: (target, data) => this.app.vault.createBinary(target, data).then(() => undefined),
+        },
+        this.settings.exportFolder,
+        file.basename,
+        downloaded.audio,
+      );
+      new Notice(`Exported to ${path}`);
+    } catch (error) {
+      new Notice(error instanceof Error && error.message.trim() ? error.message : "Could not save the export.");
+    }
   }
 
   private async removeSavedNarration(): Promise<void> {

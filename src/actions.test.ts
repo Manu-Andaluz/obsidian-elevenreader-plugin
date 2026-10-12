@@ -5,7 +5,13 @@ import { READER_ACTIONS } from "./actions.ts";
 test("lists the reader commands and leaves playback off the surface", () => {
   assert.deepEqual(
     READER_ACTIONS.map((action) => action.name),
-    ["Narrate current note", "Open player", "Stop narration", "Remove saved narration"],
+    [
+      "Narrate current note",
+      "Open player",
+      "Stop narration",
+      "Remove saved narration",
+      "Export audio",
+    ],
   );
   assert.equal(READER_ACTIONS.some((action) => /skip|seek|pause/i.test(action.name)), false);
 });

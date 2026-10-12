@@ -9,6 +9,7 @@ export const READER_ACTIONS = [
   { id: "open-player", name: "Open player" },
   { id: "stop-narration", name: "Stop narration" },
   { id: "remove-saved-narration", name: "Remove saved narration" },
+  { id: "export-audio", name: "Export audio" },
 ] as const;
 
 export type ReaderActionId = (typeof READER_ACTIONS)[number]["id"];

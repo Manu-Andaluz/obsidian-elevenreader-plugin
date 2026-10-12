@@ -2,6 +2,7 @@ import { App, DropdownComponent, PluginSettingTab, Setting } from "obsidian";
 import { choiceLabels, ensureChoice, type CatalogChoice } from "./catalog";
 import { DEFAULT_HIGHLIGHT_COLOR } from "./highlight-color";
 import { DEFAULT_SKIP_SECONDS, SKIP_SECONDS, type SkipSeconds } from "./player-geometry";
+import { DEFAULT_EXPORT_FOLDER, normalizeExportFolder } from "./export-audio";
 import type { GenerationRecord } from "./history";
 import type ElevenLabsReaderPlugin from "./main";
 
@@ -12,6 +13,7 @@ export interface ReaderSettings {
   playerTop: number | null;
   skipSeconds: SkipSeconds;
   highlightColor: string;
+  exportFolder: string;
   generations: GenerationRecord[];
 }
 
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   playerTop: null,
   skipSeconds: DEFAULT_SKIP_SECONDS,
   highlightColor: DEFAULT_HIGHLIGHT_COLOR,
+  exportFolder: DEFAULT_EXPORT_FOLDER,
   generations: [],
 };
 
@@ -101,6 +104,15 @@ export class ReaderSettingTab extends PluginSettingTab {
       .addColorPicker((picker) => {
         picker.setValue(this.plugin.settings.highlightColor).onChange((value) => {
           this.plugin.setHighlightColor(value);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Export folder")
+      .setDesc("Vault folder for exported MP3 files. The default, audios, is the vault root: ../../../audios from the installed plugin.")
+      .addText((text) => {
+        text.setPlaceholder(DEFAULT_EXPORT_FOLDER).setValue(this.plugin.settings.exportFolder).onChange((value) => {
+          this.plugin.setExportFolder(value);
         });
       });
 
