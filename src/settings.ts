@@ -1,5 +1,6 @@
 import { App, DropdownComponent, PluginSettingTab, Setting } from "obsidian";
 import { choiceLabels, ensureChoice, type CatalogChoice } from "./catalog";
+import { DEFAULT_HIGHLIGHT_COLOR } from "./highlight-color";
 import { DEFAULT_SKIP_SECONDS, SKIP_SECONDS, type SkipSeconds } from "./player-geometry";
 import type { GenerationRecord } from "./history";
 import type ElevenLabsReaderPlugin from "./main";
@@ -10,6 +11,7 @@ export interface ReaderSettings {
   playerLeft: number | null;
   playerTop: number | null;
   skipSeconds: SkipSeconds;
+  highlightColor: string;
   generations: GenerationRecord[];
 }
 
@@ -21,6 +23,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   playerLeft: null,
   playerTop: null,
   skipSeconds: DEFAULT_SKIP_SECONDS,
+  highlightColor: DEFAULT_HIGHLIGHT_COLOR,
   generations: [],
 };
 
@@ -89,6 +92,15 @@ export class ReaderSettingTab extends PluginSettingTab {
           if (seconds === 5 || seconds === 10 || seconds === 15) {
             this.plugin.setSkipSeconds(seconds);
           }
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Highlight")
+      .setDesc("Color of the word being spoken. Pick a stronger color if a theme or snippet hides it.")
+      .addColorPicker((picker) => {
+        picker.setValue(this.plugin.settings.highlightColor).onChange((value) => {
+          this.plugin.setHighlightColor(value);
         });
       });
 

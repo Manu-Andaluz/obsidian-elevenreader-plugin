@@ -17,6 +17,7 @@ import {
 import { narrationText } from "./note-text";
 import { clearSpokenRange, showSpokenRange, spokenField } from "./editor-highlight";
 import { MiniPlayer, type PlayerPhase } from "./player";
+import { normalizeHighlightColor } from "./highlight-color";
 import { normalizeSkipSeconds, type SkipSeconds } from "./player-geometry";
 import {
   API_KEY_SECRET_ID,
@@ -65,6 +66,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       },
     });
     this.player.setSkipSeconds(this.settings.skipSeconds);
+    this.applyHighlightColor();
     this.register(() => this.player?.destroy());
     this.restorePlayerPlace();
 
@@ -129,6 +131,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.generation += 1;
     this.releaseAudio();
     this.clearHighlight();
+    document.body.style.removeProperty("--elevenlabs-spoken");
   }
 
   async loadSettings(): Promise<void> {
@@ -137,8 +140,19 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...stored,
       skipSeconds: normalizeSkipSeconds(stored?.skipSeconds),
+      highlightColor: normalizeHighlightColor(stored?.highlightColor),
       generations: sanitizeGenerations(stored?.generations),
     };
+  }
+
+  setHighlightColor(color: string): void {
+    this.settings.highlightColor = normalizeHighlightColor(color);
+    this.applyHighlightColor();
+    void this.saveSettings();
+  }
+
+  private applyHighlightColor(): void {
+    document.body.style.setProperty("--elevenlabs-spoken", this.settings.highlightColor);
   }
 
   setSkipSeconds(seconds: SkipSeconds): void {

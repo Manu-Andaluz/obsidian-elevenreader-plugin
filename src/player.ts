@@ -82,14 +82,10 @@ export class MiniPlayer {
       this.hide();
     });
 
-    this.root.append(
-      this.skipBackButton,
-      this.playButton,
-      this.skipForwardButton,
-      this.seek,
-      this.time,
-      this.hideButton,
-    );
+    const transport = document.createElement("div");
+    transport.addClass("elevenlabs-player-transport");
+    transport.append(this.skipBackButton, this.playButton, this.skipForwardButton);
+    this.root.append(transport, this.seek, this.time, this.hideButton);
     document.body.append(this.root);
     this.labelSkips();
     this.render();
