@@ -7,6 +7,7 @@ test("lists the reader commands and leaves playback off the surface", () => {
     READER_ACTIONS.map((action) => action.name),
     [
       "Narrate current note",
+      "Narrate selected text",
       "Open player",
       "Stop narration",
       "Remove saved narration",

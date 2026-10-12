@@ -2,7 +2,15 @@ import { MarkdownView, Notice, Plugin, TFile, base64ToArrayBuffer, requestUrl } 
 import { READER_ACTIONS, type ReaderAction, type ReaderActionId } from "./actions";
 import { ReaderActionsModal } from "./actions-modal";
 import { EditorView } from "@codemirror/view";
-import { loadVoiceCatalog, modelsUrl, parseSpeechModels, type CatalogChoice } from "./catalog";
+import {
+  collectionsUrl,
+  loadVoiceCatalog,
+  modelsUrl,
+  parseSpeechModels,
+  parseVoiceCollections,
+  type CatalogChoice,
+  type VoiceCollection,
+} from "./catalog";
 import {
   historyAudioUrl,
   isMissingAudio,
@@ -15,7 +23,7 @@ import {
   type GenerationRecord,
 } from "./history";
 import { audioFromHistory, normalizeExportFolder, saveExport } from "./export-audio";
-import { narrationText } from "./note-text";
+import { narrationSelectionText, narrationText } from "./note-text";
 import { clearSpokenRange, showSpokenRange, spokenField } from "./editor-highlight";
 import { MiniPlayer, type PlayerPhase } from "./player";
 import { normalizeHighlightColor } from "./highlight-color";
@@ -87,8 +95,30 @@ export default class ElevenLabsReaderPlugin extends Plugin {
         if (this.audio) this.syncHighlight(this.audio.currentTime, this.audio.duration);
       }),
     );
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        const selection = editor.getSelection();
+        if (!selection.trim()) return;
+
+        menu.addItem((item) => {
+          item.setTitle("Narrate selected text").onClick(() => {
+            void this.narrateSelectedText(selection);
+          });
+        });
+      }),
+    );
 
     for (const action of this.readerActions()) {
+      if (action.id === "narrate-selected-text") {
+        this.addCommand({
+          id: action.id,
+          name: action.name,
+          editorCallback: (editor) => {
+            void this.narrateSelectedText(editor.getSelection());
+          },
+        });
+        continue;
+      }
       this.addCommand({
         id: action.id,
         name: action.name,
@@ -113,6 +143,9 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     const run: Record<ReaderActionId, () => void> = {
       "narrate-current-note": () => {
         void this.narrateCurrentNote();
+      },
+      "narrate-selected-text": () => {
+        void this.narrateSelectedText();
       },
       "open-player": () => {
         this.player?.show();
@@ -152,6 +185,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...stored,
+      voiceCollectionId: typeof stored?.voiceCollectionId === "string" ? stored.voiceCollectionId : "",
       skipSeconds: normalizeSkipSeconds(stored?.skipSeconds),
       highlightColor: normalizeHighlightColor(stored?.highlightColor),
       exportFolder: normalizeExportFolder(stored?.exportFolder),
@@ -193,8 +227,12 @@ export default class ElevenLabsReaderPlugin extends Plugin {
     this.app.secretStorage.setSecret(API_KEY_SECRET_ID, value.trim());
   }
 
-  async listVoices(): Promise<CatalogChoice[]> {
-    return loadVoiceCatalog((url) => this.elevenText(url));
+  async listVoices(collectionId?: string): Promise<CatalogChoice[]> {
+    return loadVoiceCatalog((url) => this.elevenText(url), collectionId || undefined);
+  }
+
+  async listVoiceCollections(): Promise<VoiceCollection[]> {
+    return parseVoiceCollections(await this.elevenText(collectionsUrl()));
   }
 
   async listModels(): Promise<CatalogChoice[]> {
@@ -371,6 +409,29 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       return;
     }
 
+    await this.narrateText(file.path, text);
+  }
+
+  private async narrateSelectedText(selection?: string): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || file.extension !== "md") {
+      this.report("Open a note and select text to narrate.");
+      return;
+    }
+
+    const selectedText = selection ?? this.app.workspace
+      .getActiveViewOfType(MarkdownView)
+      ?.editor.getSelection();
+    const text = narrationSelectionText(selectedText ?? "");
+    if (!text) {
+      this.report("Select some text to narrate.");
+      return;
+    }
+
+    await this.narrateText(file.path, text);
+  }
+
+  private async narrateText(path: string, text: string): Promise<void> {
     const token = ++this.generation;
     this.releaseAudio();
     this.script = null;
@@ -389,7 +450,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
 
     const matches = reusableMatches(this.settings.generations, fingerprint);
     if (matches.length > 0) {
-      const reused = await this.tryReuse(matches, token, file.path, text);
+      const reused = await this.tryReuse(matches, token, path, text);
       if (reused !== "generate") return;
     }
 
@@ -415,7 +476,7 @@ export default class ElevenLabsReaderPlugin extends Plugin {
       const spans = wordSpans(text, result.characters, result.starts, result.ends);
       const verified = await this.verifyForReuse(result.historyItemId, fingerprint, token, spans);
       if (token !== this.generation) return;
-      this.script = { path: file.path, text, spans };
+      this.script = { path, text, spans };
       this.play(verified ?? base64ToArrayBuffer(result.audioBase64), token);
     } catch (error) {
       if (token !== this.generation) return;

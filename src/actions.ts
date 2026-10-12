@@ -6,6 +6,7 @@ export interface ReaderAction {
 
 export const READER_ACTIONS = [
   { id: "narrate-current-note", name: "Narrate current note" },
+  { id: "narrate-selected-text", name: "Narrate selected text" },
   { id: "open-player", name: "Open player" },
   { id: "stop-narration", name: "Stop narration" },
   { id: "remove-saved-narration", name: "Remove saved narration" },

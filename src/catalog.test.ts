@@ -8,12 +8,13 @@ import {
   voicesPageUrl,
 } from "./catalog.ts";
 
-test("asks for premade and account voices, one page at a time", () => {
+test("asks for all voices and supports collection filtering", () => {
   assert.equal(
-    voicesPageUrl("default", null),
-    "https://api.elevenlabs.io/v2/voices?page_size=100&voice_type=default&include_total_count=false",
+    voicesPageUrl(null, null),
+    "https://api.elevenlabs.io/v2/voices?page_size=100&include_total_count=false",
   );
-  assert.match(voicesPageUrl("non-community", "next"), /next_page_token=next/);
+  assert.match(voicesPageUrl(null, "next", "teacher-id"), /next_page_token=next/);
+  assert.match(voicesPageUrl(null, null, "teacher-id"), /collection_id=teacher-id/);
 });
 
 test("keeps speech models and walks every voice page", async () => {
@@ -26,22 +27,18 @@ test("keeps speech models and walks every voice page", async () => {
   assert.deepEqual(models, [{ id: "eleven_multilingual_v2", name: "Multilingual v2" }]);
 
   const pages: Record<string, string> = {
-    [voicesPageUrl("default", null)]: JSON.stringify({
+    [voicesPageUrl(null, null)]: JSON.stringify({
       voices: [{ voice_id: "george", name: "George" }],
       has_more: true,
       next_page_token: "p2",
     }),
-    [voicesPageUrl("default", "p2")]: JSON.stringify({
-      voices: [{ voice_id: "sarah", name: "Sarah" }],
-      has_more: false,
-      next_page_token: null,
-    }),
-    [voicesPageUrl("non-community", null)]: JSON.stringify({
+    [voicesPageUrl(null, "p2")]: JSON.stringify({
       voices: [
         { voice_id: "sarah", name: "Sarah" },
         { voice_id: "mine", name: "Mine" },
       ],
       has_more: false,
+      next_page_token: null,
     }),
   };
 

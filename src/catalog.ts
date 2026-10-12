@@ -3,20 +3,51 @@ export interface CatalogChoice {
   name: string;
 }
 
-const VOICE_TYPES = ["default", "non-community"] as const;
+export interface VoiceCollection {
+  id: string;
+  name: string;
+}
+
 const MODELS_URL = "https://api.elevenlabs.io/v1/models";
+const COLLECTIONS_URL = "https://api.elevenlabs.io/v1/voices/collections";
 
 export function modelsUrl(): string {
   return MODELS_URL;
 }
 
-export function voicesPageUrl(voiceType: string, pageToken: string | null): string {
+export function collectionsUrl(): string {
+  return COLLECTIONS_URL;
+}
+
+export function voicesPageUrl(
+  voiceType: string | null,
+  pageToken: string | null,
+  collectionId?: string,
+): string {
   const url = new URL("https://api.elevenlabs.io/v2/voices");
   url.searchParams.set("page_size", "100");
-  url.searchParams.set("voice_type", voiceType);
   url.searchParams.set("include_total_count", "false");
+  if (voiceType) url.searchParams.set("voice_type", voiceType);
+  if (collectionId) url.searchParams.set("collection_id", collectionId);
   if (pageToken) url.searchParams.set("next_page_token", pageToken);
   return url.toString();
+}
+
+export function parseVoiceCollections(body: string): VoiceCollection[] {
+  const parsed: unknown = JSON.parse(body);
+  if (!parsed || typeof parsed !== "object") return [];
+  const collections = (parsed as { collections?: unknown }).collections;
+  if (!Array.isArray(collections)) return [];
+  return collections.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const collection = value as { collection_id?: unknown; title?: unknown };
+    if (typeof collection.collection_id !== "string" || !collection.collection_id.trim()) return [];
+    const id = collection.collection_id.trim();
+    const name = typeof collection.title === "string" && collection.title.trim()
+      ? collection.title.trim()
+      : id;
+    return [{ id, name }];
+  });
 }
 
 export function parseVoicesPage(body: string): {
@@ -52,18 +83,19 @@ export function parseSpeechModels(body: string): CatalogChoice[] {
 
 export async function loadVoiceCatalog(
   fetchText: (url: string) => Promise<string>,
+  collectionId?: string,
 ): Promise<CatalogChoice[]> {
   const byId = new Map<string, CatalogChoice>();
-  for (const voiceType of VOICE_TYPES) {
-    let pageToken: string | null = null;
-    for (let page = 0; page < 20; page++) {
-      const parsed = parseVoicesPage(await fetchText(voicesPageUrl(voiceType, pageToken)));
-      for (const voice of parsed.voices) {
-        if (!byId.has(voice.id)) byId.set(voice.id, voice);
-      }
-      if (!parsed.hasMore || !parsed.nextPageToken) break;
-      pageToken = parsed.nextPageToken;
+  let pageToken: string | null = null;
+  const seenTokens = new Set<string>();
+  while (true) {
+    const parsed = parseVoicesPage(await fetchText(voicesPageUrl(null, pageToken, collectionId)));
+    for (const voice of parsed.voices) {
+      if (!byId.has(voice.id)) byId.set(voice.id, voice);
     }
+    if (!parsed.hasMore || !parsed.nextPageToken || seenTokens.has(parsed.nextPageToken)) break;
+    seenTokens.add(parsed.nextPageToken);
+    pageToken = parsed.nextPageToken;
   }
   return sortChoices([...byId.values()]);
 }

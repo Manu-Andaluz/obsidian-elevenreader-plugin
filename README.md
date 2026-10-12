@@ -1,6 +1,6 @@
 # ElevenLabs Reader
 
-Local Obsidian plugin that narrates the open note. Playback stays in memory. An exported MP3 is written only when you run **Export audio**.
+Local Obsidian plugin that narrates the open note or selected text. Playback stays in memory. An exported MP3 is written only when you run **Export audio**.
 
 ## Install in this test vault
 
@@ -19,15 +19,15 @@ Put the API key in the plugin settings. Obsidian keeps it in this vault's secret
 ## Use
 
 1. Open a note.
-2. Run **Open actions** (`⌘⇧A`) and pick narrate, open player, stop, remove saved narration, or export audio. The same commands remain in the command palette. **Open player** is also `⌘⇧L`.
+2. Run **Open actions** (`⌘⇧A`) and pick an action. To narrate a passage, select it in the editor and right-click **Narrate selected text**, or run that command from Open actions or the command palette. **Narrate current note** still narrates the whole note. **Open player** is also `⌘⇧L`.
 3. The player shows `…` while ElevenLabs generates, then plays. Drag the bar to move it. Play, pause, and the slider seek within the current narration. Skip backward and skip forward jump by the interval in plugin settings (5, 10, or 15 seconds; 10 by default). They are available while audio is playing or paused. The bar fades in when it opens and fades out when you hide it. Play and pause swap with a short mark. A reduced-motion preference turns that motion off.
 4. Run **Stop narration** to cancel generation or discard the current audio.
 
 A failed request shows the ElevenLabs error in a notice. Cancelling shows `Narration cancelled.` The note itself is left unchanged.
 
-Voice and model are chosen in plugin settings, not on the player. The choice is saved and used on the next narration.
+Voice collection, voice, and model are chosen in plugin settings, not on the player. **Voice collection** filters the voice list; **All voices** loads every voice available to the API key, including community voices. The choice is saved and used on the next narration.
 
-A matching narration is reused when the note text, voice, model, and audio format are the same as a generation this plugin already completed. The local record is the ElevenLabs history item id plus a hash of that request. Before an MP3 is exported, reuse downloads the audio from [Get audio from history item](https://elevenlabs.io/docs/api-reference/history/get-audio). After export, playback and later exports read that MP3 from the vault first. If the local file is missing, playback/export falls back to ElevenLabs. Narrations created outside this plugin are not imported.
+A matching narration is reused when the narrated text, voice, model, and audio format match a generation this plugin already completed. Different selected passages have different text and therefore use separate narrations; identical text can reuse the same audio. The local record is the ElevenLabs history item id plus a hash of that request. Before an MP3 is exported, reuse downloads the audio from [Get audio from history item](https://elevenlabs.io/docs/api-reference/history/get-audio). After export, playback and later exports read that MP3 from the vault first. If the local file is missing, playback/export falls back to ElevenLabs. Narrations created outside this plugin are not imported.
 
 **Remove saved narration** drops the saved reference for the open note, using the current voice and model. The next narration generates a replacement. Other saved narrations stay. An MP3 already exported for that note stays in the export folder.
 
